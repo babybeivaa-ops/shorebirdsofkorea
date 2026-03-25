@@ -419,3 +419,306 @@ function hideError() {
 </script>
 </body>
 </html>
+
+<script>
+const API_URL = 'https://shorebirds-api.onrender.com/analyze';
+
+let imageBase64 = null;
+let imageMime = 'image/jpeg';
+
+document.getElementById('file-input').addEventListener('change', e => handleFile(e.target.files[0]));
+document.getElementById('camera-input').addEventListener('change', e => handleFile(e.target.files[0]));
+
+document.addEventListener('paste', e => {
+  const items = e.clipboardData?.items || [];
+  for (const item of items) {
+    if (item.type && item.type.startsWith('image/')) {
+      const file = item.getAsFile();
+      if (file) { handleFile(file); showTempMessage('클립보드 이미지가 붙여넣어졌습니다.'); }
+      return;
+    }
+  }
+});
+
+const uploadArea = document.getElementById('upload-area');
+uploadArea.addEventListener('dragover', e => { e.preventDefault(); uploadArea.classList.add('dragover'); });
+uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('dragover'));
+uploadArea.addEventListener('drop', e => {
+  e.preventDefault();
+  uploadArea.classList.remove('dragover');
+  if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+});
+
+function openCamera() { document.getElementById('camera-input').click(); }
+
+async function pasteFromClipboard() {
+  try {
+    if (!navigator.clipboard || !navigator.clipboard.read) throw new Error('이 브라우저에서는 지원하지 않습니다. Ctrl+V를 사용해주세요.');
+    const clipboardItems = await navigator.clipboard.read();
+    for (const ci of clipboardItems) {
+      for (const type of ci.types) {
+        if (type.startsWith('image/')) {
+          const blob = await ci.getType(type);
+          handleFile(new File([blob], 'clipboard-image.png', { type }));
+          showTempMessage('클립보드 이미지가 불러와졌습니다.');
+          return;
+        }
+      }
+    }
+    throw new Error('클립보드에 이미지가 없습니다.');
+  } catch (err) { showError(err.message); }
+}
+
+async function loadImageFromUrl() {
+  const url = document.getElementById('image-url-input').value.trim();
+  if (!url) { showError('이미지 URL을 입력해주세요.'); return; }
+  try {
+    hideError();
+    const response = await fetch(url);
+    if (!response.ok) throw new Error('이미지 URL을 불러오지 못했습니다. 일부 사이트는 외부 접근을 막을 수 있습니다.');
+    const blob = await response.blob();
+    if (!blob.type.startsWith('image/')) throw new Error('해당 URL은 이미지 파일이 아닙니다.');
+    handleFile(new File([blob], 'url-image', { type: blob.type }));
+    showTempMessage('URL 이미지가 불러와졌습니다.');
+  } catch (err) { showError(err.message); }
+}
+
+function handleFile(file) {
+  if (!file || !file.type.startsWith('image/')) { showError('이미지 파일만 업로드할 수 있습니다.'); return; }
+  imageMime = file.type;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const result = e.target.result;
+    imageBase64 = result.split(',')[1];
+    document.getElementById('preview-img').src = result;
+    document.getElementById('preview-wrap').style.display = 'block';
+    document.getElementById('analyze-btn').disabled = false;
+    document.getElementById('result-card').style.display = 'none';
+    hideError();
+  };
+  reader.readAsDataURL(file);
+}
+
+function removeImage() {
+  imageBase64 = null;
+  imageMime = 'image/jpeg';
+  document.getElementById('preview-wrap').style.display = 'none';
+  document.getElementById('preview-img').src = '';
+  document.getElementById('file-input').value = '';
+  document.getElementById('camera-input').value = '';
+  document.getElementById('image-url-input').value = '';
+  document.getElementById('analyze-btn').disabled = true;
+  document.getElementById('result-card').style.display = 'none';
+  hideError();
+}
+
+function resetAll() { removeImage(); }
+
+function buildPrompt() {
+  const location = document.getElementById('sel-location').value;
+  const month    = document.getElementById('sel-month').value;
+  const size     = document.getElementById('sel-size').value;
+  const behavior = document.getElementById('sel-behavior').value;
+
+  let context = '';
+  if (location) context += `\n- 촬영 지역: ${location}`;
+  if (month)    context += `\n- 촬영 월: ${month}`;
+  if (size)     context += `\n- 새의 크기: ${size}`;
+  if (behavior) context += `\n- 관찰 행동: ${behavior}`;
+
+  return `당신은 한국 갯벌 조류 전문 동정가입니다.
+유네스코 세계자연유산 한국의 갯벌 4개 지역(순천만, 고창, 신안, 서천) 전문입니다.
+아래 원칙을 반드시 지키세요.
+
+[최우선 동정 원칙]
+1. 한국 갯벌에서 실제로 관찰 가능성이 높은 종을 우선 고려하세요.
+2. 사진이 흐리거나, 새가 너무 멀거나, 여러 개체가 섞여 있거나, 핵심 형질이 보이지 않으면 무리하게 종명을 단정하지 마세요.
+3. 확신이 낮으면 "동정불가"로 판정할 수 있습니다.
+4. 반드시 후보종 3개를 제시하세요.
+5. 동정 시 다음 형질을 우선 확인하세요: 부리 길이와 형태, 다리 길이와 색, 몸 크기와 비율, 눈선 여부, 가슴무늬/배색/등색, 날개 패턴, 서식 위치
+6. 한국 갯벌 대표 분류군 우선 검토: 도요류, 물떼새류, 마도요류, 백로류, 저어새류, 갈매기류, 오리류
+7. 희귀종이나 멸종위기종 판단 시 보수적으로 판단하세요.
+
+[지역별 주요 출현종]
+- 순천만: 흑두루미, 저어새, 검은머리물떼새, 민물도요, 청둥오리
+- 고창: 붉은어깨도요, 큰뒷부리도요, 민물도요, 개꿩, 흰물떼새
+- 신안: 저어새, 노랑부리백로, 검은머리갈매기, 알락꼬리마도요, 넓적부리도요
+- 서천: 붉은어깨도요, 민물도요, 검은머리물떼새, 흰물떼새, 마도요
+
+[관찰 정보]${context || '\n- 없음'}
+
+반드시 아래 JSON 형식으로만 응답하세요. 설명문, 마크다운, 코드블록 없이 JSON만 출력하세요.
+
+{
+  "판독상태": "정상 또는 동정불가",
+  "동정불가사유": "없음 또는 흐림/원거리/부분가림/군집혼재/핵심형질부족 등",
+  "국명": "종 이름 또는 동정불가",
+  "학명": "학명 또는 미상",
+  "영명": "English name 또는 Unknown",
+  "확신도": "높음 또는 보통 또는 낮음",
+  "동정근거": "사진에서 관찰된 구체적 특징",
+  "유사종": "유사종 및 구별점",
+  "출현시기": "월별 출현 시기",
+  "보호현황": "멸종위기 I급 또는 II급, 천연기념물 번호, 해당없음 등",
+  "관찰팁": "관찰 팁",
+  "희귀경고": "없음 또는 희귀종/보호종 가능성. 추가 사진 및 전문가 검토 권장",
+  "후보종": [
+    { "국명": "후보1", "학명": "학명1", "가능성": "높음" },
+    { "국명": "후보2", "학명": "학명2", "가능성": "보통" },
+    { "국명": "후보3", "학명": "학명3", "가능성": "낮음" }
+  ],
+  "분류": {
+    "계": "Animalia (동물계)",
+    "문": "Chordata (척삭동물문)",
+    "강": "Aves (조강)",
+    "목": "목 학명 (한국어 목명)",
+    "과": "과 학명 (한국어 과명)",
+    "속": "속 학명 (한국어 속명)"
+  },
+  "IUCN": {
+    "등급": "LC 또는 NT 또는 VU 또는 EN 또는 CR",
+    "등급명": "관심대상 또는 준위협 또는 취약 또는 위기 또는 위급",
+    "버전": "3.1(2024)"
+  }
+}`;
+}
+
+async function analyze() {
+  if (!imageBase64) return;
+  hideError();
+  document.getElementById('loading').style.display = 'block';
+  document.getElementById('analyze-btn').disabled = true;
+  document.getElementById('result-card').style.display = 'none';
+
+  try {
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imageBase64, imageMime, prompt: buildPrompt() })
+    });
+
+    if (!res.ok) {
+      let errText = `서버 오류 (${res.status})`;
+      try { const err = await res.json(); errText = err.error?.message || err.detail || errText; } catch {}
+      throw new Error(errText);
+    }
+
+    const data = await res.json();
+    // Groq 형식 또는 { result } 형식 모두 대응
+    const text = data.choices?.[0]?.message?.content || data.result || '';
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('응답 형식 오류입니다. 다시 시도해주세요.');
+    renderResult(JSON.parse(jsonMatch[0]));
+
+  } catch (e) {
+    showError(e.message || '알 수 없는 오류가 발생했습니다.');
+  } finally {
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('analyze-btn').disabled = false;
+  }
+}
+
+function renderResult(r) {
+  const isNotIdentifiable = r['판독상태'] === '동정불가' || r['국명'] === '동정불가';
+
+  document.getElementById('r-name').textContent    = r['국명'] || '-';
+  document.getElementById('r-sci').textContent     = r['학명'] || '-';
+  document.getElementById('r-eng').textContent     = r['영명'] || '-';
+  document.getElementById('r-reason').textContent  = r['동정근거'] || '-';
+  document.getElementById('r-similar').textContent = r['유사종'] || '-';
+  document.getElementById('r-season').textContent  = r['출현시기'] || '-';
+  document.getElementById('r-tip').textContent     = r['관찰팁'] || '-';
+
+  const conf = r['확신도'] || '';
+  const confEl = document.getElementById('r-conf');
+  confEl.textContent = isNotIdentifiable ? '동정불가' : conf;
+  confEl.className = 'confidence-badge ' + (isNotIdentifiable ? 'conf-low' : conf === '높음' ? 'conf-high' : conf === '보통' ? 'conf-mid' : 'conf-low');
+
+  const notIdWrap = document.getElementById('not-id-wrap');
+  if (isNotIdentifiable) {
+    notIdWrap.style.display = 'block';
+    document.getElementById('r-notice').textContent =
+      `이 사진은 종 단정이 어렵습니다. 사유: ${r['동정불가사유'] || '핵심 형질 부족'}. 부리, 다리, 머리무늬가 더 잘 보이는 사진을 추가하면 정확도가 올라갑니다.`;
+  } else {
+    notIdWrap.style.display = 'none';
+  }
+
+  const top3El = document.getElementById('r-top3');
+  top3El.innerHTML = '';
+  const candidates = Array.isArray(r['후보종']) ? r['후보종'] : [];
+  if (candidates.length) {
+    candidates.forEach((item, idx) => {
+      const el = document.createElement('div');
+      el.className = 'top3-item';
+      el.innerHTML = `<strong>${idx + 1}순위. ${escapeHtml(item['국명'] || '-')}</strong><br>${escapeHtml(item['학명'] || '-')}<br>가능성: ${escapeHtml(item['가능성'] || '-')}`;
+      top3El.appendChild(el);
+    });
+  } else {
+    const el = document.createElement('span');
+    el.className = 'tag';
+    el.textContent = '후보종 정보 없음';
+    top3El.appendChild(el);
+  }
+
+  const protectEl = document.getElementById('r-protect');
+  protectEl.innerHTML = '';
+  const status = r['보호현황'] || '해당없음';
+  const tag = document.createElement('span');
+  tag.className = 'tag' + (status.includes('급') || status.includes('천연') ? ' endangered-tag' : '');
+  tag.textContent = status;
+  protectEl.appendChild(tag);
+
+  const rareWrap = document.getElementById('rare-wrap');
+  const rareEl = document.getElementById('r-rare');
+  const rareText = r['희귀경고'] || '없음';
+  if (rareText !== '없음') {
+    rareWrap.style.display = 'block';
+    rareEl.className = 'warning-box';
+    rareEl.textContent = rareText;
+  } else {
+    rareWrap.style.display = 'none';
+  }
+
+  const tax = r['분류'] || {};
+  document.getElementById('t-kingdom').textContent = tax['계'] || '-';
+  document.getElementById('t-phylum').textContent  = tax['문'] || '-';
+  document.getElementById('t-class').textContent   = tax['강'] || '-';
+  document.getElementById('t-order').textContent   = tax['목'] || '-';
+  document.getElementById('t-family').textContent  = tax['과'] || '-';
+  document.getElementById('t-genus').textContent   = tax['속'] || '-';
+
+  const iucn = r['IUCN'] || {};
+  const iucnEl = document.getElementById('r-iucn');
+  if (iucn['등급']) {
+    iucnEl.innerHTML = `<span class="iucn-badge iucn-${escapeHtml(iucn['등급'])}">${escapeHtml(iucn['등급'])}</span>${escapeHtml(iucn['등급명'] || '')} &nbsp;·&nbsp; IUCN 적색목록 ${escapeHtml(iucn['버전'] || '')}`;
+  } else {
+    iucnEl.textContent = '-';
+  }
+
+  document.getElementById('result-card').style.display = 'block';
+  document.getElementById('result-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function escapeHtml(str) {
+  return String(str).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#039;');
+}
+
+function showError(msg) {
+  const el = document.getElementById('error-msg');
+  el.textContent = '⚠️ ' + msg;
+  el.style.display = 'block';
+}
+
+function hideError() {
+  document.getElementById('error-msg').style.display = 'none';
+}
+
+function showTempMessage(msg) {
+  const el = document.getElementById('error-msg');
+  el.textContent = 'ℹ️ ' + msg;
+  el.style.display = 'block';
+  setTimeout(() => { if (el.textContent === 'ℹ️ ' + msg) el.style.display = 'none'; }, 2200);
+}
+</script>
+</body>
+</html>
