@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>한국 갯벌 조류 동정 시스템</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Noto Sans KR', sans-serif; background: linear-gradient(135deg, #0a2a4a 0%, #1a5276 50%, #2e86ab 100%); min-height: 100vh; color: #fff; }
+header { text-align: center; padding: 32px 20px 16px; }
+header h1 { font-size: 1.8rem; font-weight: 700; }
+header p { margin-top: 6px; font-size: 0.9rem; opacity: 0.75; }
+.badge { display: inline-block; background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); border-radius: 20px; padding: 4px 12px; font-size: 0.75rem; margin-top: 8px; }
+.container { max-width: 760px; margin: 0 auto; padding: 16px 16px 60px; }
+.card { background: rgba(255,255,255,0.08); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.15); border-radius: 16px; padding: 24px; margin-bottom: 16px; }
+.card h2 { font-size: 1rem; font-weight: 600; margin-bottom: 16px; opacity: 0.9; }
+.upload-area { border: 2px dashed rgba(255,255,255,0.35); border-radius: 12px; padding: 40px 20px; text-align: center; cursor: pointer; transition: all 0.2s; position: relative; }
+.upload-area:hover, .upload-area.dragover { border-color: #5dade2; background: rgba(93,173,226,0.1); }
+.upload-area input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+.upload-icon { font-size: 3rem; margin-bottom: 12px; }
+.upload-area p { font-size: 0.9rem; opacity: 0.8; }
+.upload-area small { font-size: 0.75rem; opacity: 0.55; margin-top: 6px; display: block; }
+.btn-row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 14px; }
+.camera-btn, .utility-btn, .url-btn { background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); color: #fff; padding: 10px 16px; border-radius: 8px; cursor: pointer; font-size: 0.85rem; transition: background 0.2s; }
+.camera-btn:hover, .utility-btn:hover, .url-btn:hover { background: rgba(255,255,255,0.25); }
+.url-input-wrap { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+.url-input-wrap input { flex: 1; min-width: 220px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.25); color: #fff; padding: 10px 12px; border-radius: 8px; font-size: 0.85rem; }
+.url-input-wrap input::placeholder { color: rgba(255,255,255,0.55); }
+#preview-wrap { display: none; margin-top: 16px; }
+.crop-container { position: relative; display: inline-block; max-width: 100%; cursor: crosshair; user-select: none; -webkit-user-select: none; }
+.crop-container img { display: block; max-width: 100%; max-height: 340px; border-radius: 10px; border: 2px solid rgba(255,255,255,0.2); pointer-events: none; }
+.crop-overlay { position: absolute; border: 2px solid #5dade2; background: rgba(93,173,226,0.15); box-shadow: 0 0 0 9999px rgba(0,0,0,0.45); pointer-events: none; display: none; }
+.crop-hint { font-size: 0.78rem; opacity: 0.6; margin-top: 8px; text-align: center; }
+.crop-actions { display: flex; gap: 8px; margin-top: 10px; justify-content: center; flex-wrap: wrap; }
+.crop-btn { background: rgba(93,173,226,0.3); border: 1px solid #5dade2; color: #fff; padding: 7px 16px; border-radius: 7px; cursor: pointer; font-size: 0.82rem; transition: background 0.2s; }
+.crop-btn:hover { background: rgba(93,173,226,0.5); }
+.cropped-preview { display: none; margin-top: 10px; text-align: center; }
+.cropped-preview img { max-width: 100%; max-height: 180px; border-radius: 8px; border: 2px solid #5dade2; }
+.cropped-preview small { display: block; margin-top: 4px; font-size: 0.75rem; opacity: 0.6; }
+.remove-btn { display: block; margin: 8px auto 0; background: rgba(231,76,60,0.3); border: 1px solid rgba(231,76,60,0.5); color: #fff; padding: 6px 16px; border-radius: 6px; cursor: pointer; font-size: 0.8rem; }
+.options-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 560px) { .options-grid { grid-template-columns: 1fr; } }
+.option-group label { display: block; font-size: 0.8rem; opacity: 0.7; margin-bottom: 6px; }
+.option-group select { width: 100%; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.25); color: #fff; padding: 9px 12px; border-radius: 8px; font-size: 0.85rem; appearance: none; cursor: pointer; }
+.option-group select option { background: #1a3a5c; color: #fff; }
+.analyze-btn { width: 100%; padding: 14px; background: linear-gradient(135deg, #2980b9, #1abc9c); border: none; border-radius: 10px; color: #fff; font-size: 1rem; font-weight: 600; cursor: pointer; transition: opacity 0.2s, transform 0.1s; margin-top: 4px; }
+.analyze-btn:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
+.analyze-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.loading { display: none; text-align: center; padding: 32px; }
+.spinner { width: 48px; height: 48px; border: 4px solid rgba(255,255,255,0.2); border-top-color: #5dade2; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 16px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+#result-card { display: none; }
+.result-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,0.15); }
+.bird-icon { font-size: 2.5rem; }
+.bird-name h3 { font-size: 1.4rem; font-weight: 700; }
+.bird-name .sci-name { font-size: 0.85rem; opacity: 0.65; font-style: italic; margin-top: 2px; }
+.bird-name .eng-name { font-size: 0.85rem; opacity: 0.65; margin-top: 1px; }
+.confidence-badge { margin-left: auto; padding: 6px 14px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; white-space: nowrap; }
+.conf-high { background: rgba(39,174,96,0.3); border: 1px solid #27ae60; }
+.conf-mid  { background: rgba(243,156,18,0.3); border: 1px solid #f39c12; }
+.conf-low  { background: rgba(231,76,60,0.3);  border: 1px solid #e74c3c; }
+.result-section { margin-bottom: 16px; }
+.result-section h4 { font-size: 0.78rem; opacity: 0.6; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+.result-section p { font-size: 0.9rem; line-height: 1.7; opacity: 0.9; }
+.tag-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.tag { background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.2); border-radius: 20px; padding: 4px 12px; font-size: 0.78rem; }
+.endangered-tag { background: rgba(231,76,60,0.25); border-color: #e74c3c; color: #ffb3ad; font-weight: 600; }
+.taxonomy-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.taxonomy-table td { padding: 6px 10px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+.taxonomy-table td:first-child { opacity: 0.55; width: 40px; }
+.taxonomy-table td:last-child { font-style: italic; }
+.iucn-badge { display: inline-block; padding: 4px 12px; border-radius: 6px; font-size: 0.82rem; font-weight: 700; margin-right: 8px; }
+.iucn-LC { background: rgba(39,174,96,0.3); border: 1px solid #27ae60; }
+.iucn-NT { background: rgba(52,152,219,0.3); border: 1px solid #3498db; }
+.iucn-VU { background: rgba(243,156,18,0.3); border: 1px solid #f39c12; }
+.iucn-EN { background: rgba(230,126,34,0.3); border: 1px solid #e67e22; }
+.iucn-CR { background: rgba(231,76,60,0.3);  border: 1px solid #e74c3c; }
+.top3-item { display: inline-block; background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.2); border-radius: 10px; padding: 8px 12px; font-size: 0.82rem; line-height: 1.5; }
+.warning-box { background: rgba(231,76,60,0.18); border: 1px solid rgba(231,76,60,0.45); border-radius: 10px; padding: 12px 14px; font-size: 0.9rem; }
+.reset-btn { width: 100%; margin-top: 16px; padding: 10px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #fff; border-radius: 8px; cursor: pointer; font-size: 0.85rem; transition: background 0.2s; }
+.reset-btn:hover { background: rgba(255,255,255,0.2); }
+.error-msg { background: rgba(231,76,60,0.2); border: 1px solid rgba(231,76,60,0.4); border-radius: 8px; padding: 14px; font-size: 0.85rem; display: none; margin-bottom: 12px; }
+footer { text-align: center; padding: 20px; font-size: 0.75rem; opacity: 0.4; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🦅 한국 갯벌 조류 동정 시스템</h1>
+  <p>사진을 업로드하면 AI가 조류 종을 동정합니다</p>
+  <span class="badge">🌍 유네스코 세계자연유산 한국의 갯벌</span>
+</header>
+<div class="container">
+  <div class="card">
+    <h2>📷 사진 업로드</h2>
+    <div class="upload-area" id="upload-area">
+      <input type="file" id="file-input" accept="image/*">
+      <div class="upload-icon">🖼️</div>
+      <p>클릭하거나 사진을 드래그하세요</p>
+      <small>JPG, PNG, WEBP 지원 · Ctrl+V 붙여넣기 가능</small>
+    </div>
+    <div class="btn-row">
+      <button class="camera-btn" onclick="openCamera()">📸 카메라로 촬영</button>
+      <button class="utility-btn" onclick="pasteFromClipboard()">📋 클립보드 붙여넣기</button>
+    </div>
+    <input type="file" id="camera-input" accept="image/*" capture="environment" style="display:none">
+    <div class="url-input-wrap">
+      <input type="text" id="image-url-input" placeholder="이미지 URL을 붙여넣으세요" onkeydown="if(event.key==='Enter') loadImageFromUrl()">
+      <button class="url-btn" onclick="loadImageFromUrl()">🔗 URL 불러오기</button>
+    </div>
+    <div id="preview-wrap">
+      <div style="text-align:center;">
+        <div class="crop-container" id="crop-container">
+          <img id="preview-img" src="" alt="미리보기">
+          <div class="crop-overlay" id="crop-overlay"></div>
+        </div>
+      </div>
+      <p class="crop-hint">🖱️ 새가 있는 영역을 드래그해서 선택하세요 (선택 안 하면 전체 사진 사용)</p>
+      <div class="crop-actions">
+        <button class="crop-btn" onclick="resetCrop()">✕ 선택 초기화</button>
+        <button class="remove-btn" style="margin:0;" onclick="removeImage()">🗑 사진 제거</button>
+      </div>
+      <div class="cropped-preview" id="cropped-preview">
+        <img id="cropped-img" src="" alt="크롭 미리보기">
+        <small>✂️ 이 영역으로 동정합니다</small>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>📋 관찰 정보 (선택)</h2>
+    <div class="options-grid">
+      <div class="option-group">
+        <label>촬영 지역</label>
+        <select id="sel-location">
+          <option value="">선택 안함</option>
+          <option value="순천만 갯벌">순천만 갯벌 (전남)</option>
+          <option value="고창 갯벌">고창 갯벌 (전북)</option>
+          <option value="신안 갯벌">신안 갯벌 (전남)</option>
+          <option value="서천 갯벌">서천 갯벌 (충남)</option>
+        </select>
+      </div>
+      <div class="option-group">
+        <label>촬영 월</label>
+        <select id="sel-month">
+          <option value="">선택 안함</option>
+          <option value="1월">1월</option><option value="2월">2월</option>
+          <option value="3월">3월</option><option value="4월">4월</option>
+          <option value="5월">5월</option><option value="6월">6월</option>
+          <option value="7월">7월</option><option value="8월">8월</option>
+          <option value="9월">9월</option><option value="10월">10월</option>
+          <option value="11월">11월</option><option value="12월">12월</option>
+        </select>
+      </div>
+      <div class="option-group">
+        <label>새의 크기</label>
+        <select id="sel-size">
+          <option value="">선택 안함</option>
+          <option value="참새 크기 (약 15cm 이하)">참새 크기 (15cm 이하)</option>
+          <option value="비둘기 크기 (약 30cm)">비둘기 크기 (약 30cm)</option>
+          <option value="까마귀 크기 (약 50cm)">까마귀 크기 (약 50cm)</option>
+          <option value="두루미 크기 (약 100cm 이상)">두루미 크기 (100cm 이상)</option>
+        </select>
+      </div>
+      <div class="option-group">
+        <label>관찰 행동</label>
+        <select id="sel-behavior">
+          <option value="">선택 안함</option>
+          <option value="갯벌 위를 걷거나 먹이 탐색 중">갯벌 위 보행 / 먹이 탐색</option>
+          <option value="비행 중">비행 중</option>
+          <option value="무리 지어 있음">무리 지어 있음</option>
+          <option value="물 위에 떠 있음">물 위에 떠 있음</option>
+          <option value="갈대밭 또는 풀밭에 있음">갈대밭 / 풀밭</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div class="error-msg" id="error-msg"></div>
+  <button class="analyze-btn" id="analyze-btn" onclick="analyze()" disabled>🔍 조류 동정 시작</button>
+
+  <div class="loading" id="loading">
+    <div class="spinner"></div>
+    <p>AI가 사진을 분석하고 있습니다...</p>
+    <small style="opacity:0.6; margin-top:6px; display:block">잠시만 기다려주세요</small>
+  </div>
+
+  <div class="card" id="result-card">
+    <div class="result-header">
+      <div class="bird-icon">🐦</div>
+      <div class="bird-name">
+        <h3 id="r-name">-</h3>
+        <div class="sci-name" id="r-sci">-</div>
+        <div class="eng-name" id="r-eng">-</div>
+      </div>
+      <span class="confidence-badge" id="r-conf">-</span>
+    </div>
+    <div class="result-section" id="not-id-wrap" style="display:none;">
+      <h4>판독 상태</h4>
+      <p id="r-notice">-</p>
+    </div>
+    <div class="result-section">
+      <h4>후보종 TOP 3</h4>
+      <div class="tag-list" id="r-top3"></div>
+    </div>
+    <div class="result-section" id="rare-wrap" style="display:none;">
+      <h4>희귀·보호종 경고</h4>
+      <p id="r-rare">-</p>
+    </div>
+    <div class="result-section"><h4>동정 근거</h4><p id="r-reason">-</p></div>
+    <div class="result-section"><h4>유사종 및 구별점</h4><p id="r-similar">-</p></div>
+    <div class="result-section"><h4>출현 시기</h4><p id="r-season">-</p></div>
+    <div class="result-section">
+      <h4>보호 현황</h4>
+      <div class="tag-list" id="r-protect"></div>
+    </div>
+    <div class="result-section">
+      <h4>분류 체계</h4>
+      <table class="taxonomy-table">
+        <tr><td>계</td><td id="t-kingdom">-</td></tr>
+        <tr><td>문</td><td id="t-phylum">-</td></tr>
+        <tr><td>강</td><td id="t-class">-</td></tr>
+        <tr><td>목</td><td id="t-order">-</td></tr>
+        <tr><td>과</td><td id="t-family">-</td></tr>
+        <tr><td>속</td><td id="t-genus">-</td></tr>
+      </table>
+    </div>
+    <div class="result-section"><h4>IUCN 적색목록</h4><div id="r-iucn">-</div></div>
+    <div class="result-section"><h4>관찰 팁</h4><p id="r-tip">-</p></div>
+    <button class="reset-btn" onclick="resetAll()">↩ 다시 동정하기</button>
+  </div>
+</div>
+<footer>유네스코 세계자연유산 한국의 갯벌 조류 동정 시스템 · Powered by Groq AI</footer>
+
+<script>
+const API_URL = 'https://shorebirds-api.onrender.com/analyze';
+
+let imageBase64 = null;
+let imageMime = 'image/jpeg';
+let cropStart = null, cropRect = null, isCropping = false;
+let croppedBase64 = null;
+
+// 파일 입력
+document.getElementById('file-input').addEventListener('change', e => handleFile(e.target.files[0]));
+document.getElementById('camera-input').addEventListener('change', e => handleFile(e.target.files[0]));
+
+// Ctrl+V 붙여넣기
+document.addEventListener('paste', e => {
+  const items = e.clipboardData?.items || [];
+  for (const item of items) {
+    if (item.type && item.type.startsWith('image/')) {
+      const file = item.getAsFile();
+      if (file) { handleFile(file); showTempMessage('클립보드 이미지가 붙여넣어졌습니다.'); }
+      return;
+    }
+  }
+});
+
+// 드래그앤드롭 (업로드 영역)
+const uploadArea = document.getElementById('upload-area');
+uploadArea.addEventListener('dragover', e => { e.preventDefault(); uploadArea.classList.add('dragover'); });
+uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('dragover'));
+uploadArea.addEventListener('drop', e => {
+  e.preventDefault();
+  uploadArea.classList.remove('dragover');
+  if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+});
+
+function openCamera() { document.getElementById('camera-input').click(); }
+
+async function pasteFromClipboard() {
+  try {
+    if (!navigator.clipboard || !navigator.clipboard.read) throw new Error('이 브라우저에서는 지원하지 않습니다. Ctrl+V를 사용해주세요.');
+    const clipboardItems = await navigator.clipboard.read();
+    for (const ci of clipboardItems) {
+      for (const type of ci.types) {
+        if (type.startsWith('image/')) {
+          const blob = await ci.getType(type);
+          handleFile(new File([blob], 'clipboard-image.png', { type }));
+          showTempMessage('클립보드 이미지가 불러와졌습니다.');
+          return;
+        }
+      }
+    }
+    throw new Error('클립보드에 이미지가 없습니다.');
+  } catch (err) { showError(err.message); }
+}
+
+async function loadImageFromUrl() {
+  const url = document.getElementById('image-url-input').value.trim();
+  if (!url) { showError('이미지 URL을 입력해주세요.'); return; }
+  try {
+    hideError();
+    const response = await fetch(url);
+    if (!response.ok) throw new Error('이미지 URL을 불러오지 못했습니다.');
+    const blob = await response.blob();
+    if (!blob.type.startsWith('image/')) throw new Error('해당 URL은 이미지 파일이 아닙니다.');
+    handleFile(new File([blob], 'url-image', { type: blob.type }));
+    showTempMessage('URL 이미지가 불러와졌습니다.');
+  } catch (err) { showError(err.message); }
+}
+
+function handleFile(file) {
+  if (!file || !file.type.startsWith('image/')) { showError('이미지 파일만 업로드할 수 있습니다.'); return; }
+  imageMime = file.type;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const result = e.target.result;
+    imageBase64 = result.split(',')[1];
+    const img = document.getElementById('preview-img');
+    img.src = result;
+    document.getElementById('preview-wrap').style.display = 'block';
+    document.getElementById('analyze-btn').disabled = false;
+    document.getElementById('result-card').style.display = 'none';
+    hideError();
+    resetCrop();
+    img.onload = () => initCrop();
+  };
+  reader.readAsDataURL(file);
+}
+
+function removeImage() {
+  imageBase64 = null;
+  imageMime = 'image/jpeg';
+  croppedBase64 = null;
+  cropRect = null;
+  document.getElementById('preview-wrap').style.display = 'none';
+  document.getElementById('preview-img').src = '';
+  document.getElementById('file-input').value = '';
+  document.getElementById('camera-input').value = '';
+  document.getElementById('image-url-input').value = '';
+  document.getElementById('analyze-btn').disabled = true;
+  document.getElementById('result-card').style.display = 'none';
+  document.getElementById('crop-overlay').style.display = 'none';
+  document.getElementById('cropped-preview').style.display = 'none';
+  hideError();
+}
+
+function resetAll() { removeImage(); }
+
+// ── 크롭 기능 ──
+function initCrop() {
+  const container = document.getElementById('crop-container');
+  const overlay   = document.getElementById('crop-overlay');
+
+  // 기존 이벤트 제거 후 재등록 (중복 방지)
+  const newContainer = container.cloneNode(true);
+  container.parentNode.replaceChild(newContainer, container);
+
+  // img pointer-events none 유지
+  newContainer.querySelector('img').style.pointerEvents = 'none';
+
+  newContainer.addEventListener('mousedown', e => {
+    e.preventDefault();
+    const rect = newContainer.getBoundingClientRect();
+    cropStart = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    isCropping = true;
+    document.getElementById('crop-overlay').style.display = 'none';
+    croppedBase64 = null;
+    document.getElementById('cropped-preview').style.display = 'none';
+  });
+
+  document.addEventListener('mousemove', e => {
+    if (!isCropping || !cropStart) return;
+    const rect = newContainer.getBoundingClientRect();
+    const x = Math.max(0, Math.min(e.clientX - rect.left, newContainer.offsetWidth));
+    const y = Math.max(0, Math.min(e.clientY - rect.top, newContainer.offsetHeight));
+    const left   = Math.min(cropStart.x, x);
+    const top    = Math.min(cropStart.y, y);
+    const width  = Math.abs(x - cropStart.x);
+    const height = Math.abs(y - cropStart.y);
+    const ov = document.getElementById('crop-overlay');
+    ov.style.cssText = `position:absolute; display:block; left:${left}px; top:${top}px; width:${width}px; height:${height}px; border:2px solid #5dade2; background:rgba(93,173,226,0.15); box-shadow:0 0 0 9999px rgba(0,0,0,0.45); pointer-events:none;`;
+    cropRect = { left, top, width, height };
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (!isCropping) return;
+    isCropping = false;
+    if (cropRect && cropRect.width > 20 && cropRect.height > 20) applyCrop();
+    else resetCrop();
+  });
+
+  // 터치 지원 (passive:false 로 스크롤 방지)
+  newContainer.addEventListener('touchstart', e => {
+    e.preventDefault();
+    const touch = e.touches[0];
+    const rect = newContainer.getBoundingClientRect();
+    cropStart = { x: touch.clientX - rect.left, y: touch.clientY - rect.top };
+    isCropping = true;
+    croppedBase64 = null;
+    document.getElementById('cropped-preview').style.display = 'none';
+  }, { passive: false });
+
+  newContainer.addEventListener('touchmove', e => {
+    e.preventDefault();
+    if (!isCropping || !cropStart) return;
+    const touch = e.touches[0];
+    const rect = newContainer.getBoundingClientRect();
+    const x = Math.max(0, Math.min(touch.clientX - rect.left, newContainer.offsetWidth));
+    const y = Math.max(0, Math.min(touch.clientY - rect.top, newContainer.offsetHeight));
+    const left   = Math.min(cropStart.x, x);
+    const top    = Math.min(cropStart.y, y);
+    const width  = Math.abs(x - cropStart.x);
+    const height = Math.abs(y - cropStart.y);
+    const ov = document.getElementById('crop-overlay');
+    ov.style.cssText = `position:absolute; display:block; left:${left}px; top:${top}px; width:${width}px; height:${height}px; border:2px solid #5dade2; background:rgba(93,173,226,0.15); box-shadow:0 0 0 9999px rgba(0,0,0,0.45); pointer-events:none;`;
+    cropRect = { left, top, width, height };
+  }, { passive: false });
+
+  newContainer.addEventListener('touchend', () => {
+    isCropping = false;
+    if (cropRect && cropRect.width > 20 && cropRect.height > 20) applyCrop();
+    else resetCrop();
+  });
+}
+
+function applyCrop() {
+  const img       = document.getElementById('preview-img');
+  const container = document.getElementById('crop-container') || document.querySelector('.crop-container');
+  const scaleX = img.naturalWidth  / container.offsetWidth;
+  const scaleY = img.naturalHeight / img.offsetHeight;
+
+  const canvas = document.createElement('canvas');
+  canvas.width  = Math.round(cropRect.width  * scaleX);
+  canvas.height = Math.round(cropRect.height * scaleY);
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img,
+    cropRect.left * scaleX, cropRect.top * scaleY,
+    canvas.width, canvas.height,
+    0, 0, canvas.width, canvas.height
+  );
+
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+  croppedBase64 = dataUrl.split(',')[1];
+  document.getElementById('cropped-img').src = dataUrl;
+  document.getElementById('cropped-preview').style.display = 'block';
+}
+
+function resetCrop() {
+  cropRect = null;
+  croppedBase64 = null;
+  const ov = document.getElementById('crop-overlay');
+  if (ov) ov.style.display = 'none';
+  const cp = document.getElementById('cropped-preview');
+  if (cp) cp.style.display = 'none';
+}
+
+function buildPrompt() {
+  const location = document.getElementById('sel-location').value;
+  const month    = document.getElementById('sel-month').value;
+  const size     = document.getElementById('sel-size').value;
+  const behavior = document.getElementById('sel-behavior').value;
+
+  let context = '';
+  if (location) context += `\n- 촬영 지역: ${location}`;
+  if (month)    context += `\n- 촬영 월: ${month}`;
+  if (size)     context += `\n- 새의 크기: ${size}`;
+  if (behavior) context += `\n- 관찰 행동: ${behavior}`;
+
+  return `당신은 한국 갯벌 조류 전문 동정가입니다.
+유네스코 세계자연유산 한국의 갯벌 4개 지역(순천만, 고창, 신안, 서천) 전문입니다.
+
+[최우선 동정 원칙]
+1. 한국 갯벌에서 실제로 관찰 가능성이 높은 종을 우선 고려하세요.
+2. 사진이 흐리거나, 새가 너무 멀거나, 핵심 형질이 보이지 않으면 무리하게 종명을 단정하지 마세요.
+3. 확신이 낮으면 "동정불가"로 판정할 수 있습니다.
+4. 반드시 후보종 3개를 제시하세요.
+5. 동정 시 부리 길이/형태, 다리 색, 몸 크기, 눈선, 가슴무늬, 날개 패턴을 우선 확인하세요.
+6. 한국 갯벌 대표 분류군 우선: 도요류, 물떼새류, 마도요류, 백로류, 저어새류, 갈매기류, 오리류
+7. 희귀종·멸종위기종 판단 시 보수적으로 판단하세요.
+
+[지역별 주요 출현종]
+- 순천만: 흑두루미, 저어새, 검은머리물떼새, 민물도요, 청둥오리
+- 고창: 붉은어깨도요, 큰뒷부리도요, 민물도요, 개꿩, 흰물떼새
+- 신안: 저어새, 노랑부리백로, 검은머리갈매기, 알락꼬리마도요, 넓적부리도요
+- 서천: 붉은어깨도요, 민물도요, 검은머리물떼새, 흰물떼새, 마도요
+
+[관찰 정보]${context || '\n- 없음'}
+
+반드시 아래 JSON 형식으로만 응답하세요. 설명문, 마크다운, 코드블록 없이 JSON만 출력하세요.
+
+{
+  "판독상태": "정상 또는 동정불가",
+  "동정불가사유": "없음 또는 흐림/원거리/부분가림/군집혼재/핵심형질부족 등",
+  "국명": "종 이름 또는 동정불가",
+  "학명": "학명 또는 미상",
+  "영명": "English name 또는 Unknown",
+  "확신도": "높음 또는 보통 또는 낮음",
+  "동정근거": "사진에서 관찰된 구체적 특징",
+  "유사종": "유사종 및 구별점",
+  "출현시기": "월별 출현 시기",
+  "보호현황": "멸종위기 I급 또는 II급, 천연기념물 번호, 해당없음 등",
+  "관찰팁": "관찰 팁",
+  "희귀경고": "없음 또는 희귀종/보호종 가능성. 추가 사진 및 전문가 검토 권장",
+  "후보종": [
+    { "국명": "후보1", "학명": "학명1", "가능성": "높음" },
+    { "국명": "후보2", "학명": "학명2", "가능성": "보통" },
+    { "국명": "후보3", "학명": "학명3", "가능성": "낮음" }
+  ],
+  "분류": {
+    "계": "Animalia (동물계)",
+    "문": "Chordata (척삭동물문)",
+    "강": "Aves (조강)",
+    "목": "목 학명 (한국어 목명)",
+    "과": "과 학명 (한국어 과명)",
+    "속": "속 학명 (한국어 속명)"
+  },
+  "IUCN": {
+    "등급": "LC 또는 NT 또는 VU 또는 EN 또는 CR",
+    "등급명": "관심대상 또는 준위협 또는 취약 또는 위기 또는 위급",
+    "버전": "3.1(2024)"
+  }
+}`;
+}
+
+async function analyze() {
+  if (!imageBase64) return;
+  hideError();
+  document.getElementById('loading').style.display = 'block';
+  document.getElementById('analyze-btn').disabled = true;
+  document.getElementById('result-card').style.display = 'none';
+
+  try {
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        imageBase64: croppedBase64 || imageBase64,
+        imageMime,
+        prompt: buildPrompt()
+      })
+    });
+
+    if (!res.ok) {
+      let errText = `서버 오류 (${res.status})`;
+      try { const err = await res.json(); errText = err.error?.message || err.detail || errText; } catch {}
+      throw new Error(errText);
+    }
+
+    const data = await res.json();
+    const text = data.choices?.[0]?.message?.content || data.result || '';
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('응답 형식 오류입니다. 다시 시도해주세요.');
+    renderResult(JSON.parse(jsonMatch[0]));
+
+  } catch (e) {
+    showError(e.message || '알 수 없는 오류가 발생했습니다.');
+  } finally {
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('analyze-btn').disabled = false;
+  }
+}
+
+function renderResult(r) {
+  const isNotIdentifiable = r['판독상태'] === '동정불가' || r['국명'] === '동정불가';
+
+  document.getElementById('r-name').textContent    = r['국명'] || '-';
+  document.getElementById('r-sci').textContent     = r['학명'] || '-';
+  document.getElementById('r-eng').textContent     = r['영명'] || '-';
+  document.getElementById('r-reason').textContent  = r['동정근거'] || '-';
+  document.getElementById('r-similar').textContent = r['유사종'] || '-';
+  document.getElementById('r-season').textContent  = r['출현시기'] || '-';
+  document.getElementById('r-tip').textContent     = r['관찰팁'] || '-';
+
+  const conf = r['확신도'] || '';
+  const confEl = document.getElementById('r-conf');
+  confEl.textContent = isNotIdentifiable ? '동정불가' : conf;
+  confEl.className = 'confidence-badge ' + (isNotIdentifiable ? 'conf-low' : conf === '높음' ? 'conf-high' : conf === '보통' ? 'conf-mid' : 'conf-low');
+
+  const notIdWrap = document.getElementById('not-id-wrap');
+  if (isNotIdentifiable) {
+    notIdWrap.style.display = 'block';
+    document.getElementById('r-notice').textContent =
+      `이 사진은 종 단정이 어렵습니다. 사유: ${r['동정불가사유'] || '핵심 형질 부족'}. 새가 더 잘 보이는 사진을 사용하거나 드래그로 새 부분을 선택해보세요.`;
+  } else {
+    notIdWrap.style.display = 'none';
+  }
+
+  const top3El = document.getElementById('r-top3');
+  top3El.innerHTML = '';
+  const candidates = Array.isArray(r['후보종']) ? r['후보종'] : [];
+  if (candidates.length) {
+    candidates.forEach((item, idx) => {
+      const el = document.createElement('div');
+      el.className = 'top3-item';
+      el.innerHTML = `<strong>${idx + 1}순위. ${escapeHtml(item['국명'] || '-')}</strong><br>${escapeHtml(item['학명'] || '-')}<br>가능성: ${escapeHtml(item['가능성'] || '-')}`;
+      top3El.appendChild(el);
+    });
+  } else {
+    const el = document.createElement('span');
+    el.className = 'tag';
+    el.textContent = '후보종 정보 없음';
+    top3El.appendChild(el);
+  }
+
+  const protectEl = document.getElementById('r-protect');
+  protectEl.innerHTML = '';
+  const status = r['보호현황'] || '해당없음';
+  const tag = document.createElement('span');
+  tag.className = 'tag' + (status.includes('급') || status.includes('천연') ? ' endangered-tag' : '');
+  tag.textContent = status;
+  protectEl.appendChild(tag);
+
+  const rareWrap = document.getElementById('rare-wrap');
+  const rareEl = document.getElementById('r-rare');
+  const rareText = r['희귀경고'] || '없음';
+  if (rareText !== '없음') {
+    rareWrap.style.display = 'block';
+    rareEl.className = 'warning-box';
+    rareEl.textContent = rareText;
+  } else {
+    rareWrap.style.display = 'none';
+  }
+
+  const tax = r['분류'] || {};
+  document.getElementById('t-kingdom').textContent = tax['계'] || '-';
+  document.getElementById('t-phylum').textContent  = tax['문'] || '-';
+  document.getElementById('t-class').textContent   = tax['강'] || '-';
+  document.getElementById('t-order').textContent   = tax['목'] || '-';
+  document.getElementById('t-family').textContent  = tax['과'] || '-';
+  document.getElementById('t-genus').textContent   = tax['속'] || '-';
+
+  const iucn = r['IUCN'] || {};
+  const iucnEl = document.getElementById('r-iucn');
+  if (iucn['등급']) {
+    iucnEl.innerHTML = `<span class="iucn-badge iucn-${escapeHtml(iucn['등급'])}">${escapeHtml(iucn['등급'])}</span>${escapeHtml(iucn['등급명'] || '')} &nbsp;·&nbsp; IUCN 적색목록 ${escapeHtml(iucn['버전'] || '')}`;
+  } else {
+    iucnEl.textContent = '-';
+  }
+
+  document.getElementById('result-card').style.display = 'block';
+  document.getElementById('result-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function escapeHtml(str) {
+  return String(str).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#039;');
+}
+
+function showError(msg) {
+  const el = document.getElementById('error-msg');
+  el.textContent = '⚠️ ' + msg;
+  el.style.display = 'block';
+}
+
+function hideError() {
+  document.getElementById('error-msg').style.display = 'none';
+}
+
+function showTempMessage(msg) {
+  const el = document.getElementById('error-msg');
+  el.textContent = 'ℹ️ ' + msg;
+  el.style.display = 'block';
+  setTimeout(() => { if (el.textContent === 'ℹ️ ' + msg) el.style.display = 'none'; }, 2200);
+}
+</script>
+</body>
+</html>
