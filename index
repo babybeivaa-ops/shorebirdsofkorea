@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>한국 갯벌 조류 동정 시스템</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Noto Sans KR', sans-serif; background: linear-gradient(135deg, #0a2a4a 0%, #1a5276 50%, #2e86ab 100%); min-height: 100vh; color: #fff; }
+header { text-align: center; padding: 32px 20px 16px; }
+header h1 { font-size: 1.8rem; font-weight: 700; }
+header p { margin-top: 6px; font-size: 0.9rem; opacity: 0.75; }
+.badge { display: inline-block; background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); border-radius: 20px; padding: 4px 12px; font-size: 0.75rem; margin-top: 8px; }
+.container { max-width: 760px; margin: 0 auto; padding: 16px 16px 60px; }
+.card { background: rgba(255,255,255,0.08); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.15); border-radius: 16px; padding: 24px; margin-bottom: 16px; }
+.card h2 { font-size: 1rem; font-weight: 600; margin-bottom: 16px; opacity: 0.9; }
+.upload-area { border: 2px dashed rgba(255,255,255,0.35); border-radius: 12px; padding: 40px 20px; text-align: center; cursor: pointer; transition: all 0.2s; position: relative; }
+.upload-area:hover, .upload-area.dragover { border-color: #5dade2; background: rgba(93,173,226,0.1); }
+.upload-area input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+.upload-icon { font-size: 3rem; margin-bottom: 12px; }
+.upload-area p { font-size: 0.9rem; opacity: 0.8; }
+.upload-area small { font-size: 0.75rem; opacity: 0.55; margin-top: 6px; display: block; }
+.btn-row { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 14px; }
+.camera-btn { background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); color: #fff; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 0.85rem; transition: background 0.2s; }
+.camera-btn:hover { background: rgba(255,255,255,0.25); }
+.url-row { display: flex; gap: 8px; margin-top: 12px; }
+.url-row input { flex: 1; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.25); color: #fff; padding: 9px 12px; border-radius: 8px; font-size: 0.85rem; }
+.url-row input::placeholder { opacity: 0.5; }
+#preview-wrap { display: none; margin-top: 16px; text-align: center; }
+#preview-img { max-width: 100%; max-height: 320px; border-radius: 10px; border: 2px solid rgba(255,255,255,0.2); }
+.remove-btn { display: block; margin: 8px auto 0; background: rgba(231,76,60,0.3); border: 1px solid rgba(231,76,60,0.5); color: #fff; padding: 6px 16px; border-radius: 6px; cursor: pointer; font-size: 0.8rem; }
+.options-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 480px) { .options-grid { grid-template-columns: 1fr; } }
+.option-group label { display: block; font-size: 0.8rem; opacity: 0.7; margin-bottom: 6px; }
+.option-group select { width: 100%; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.25); color: #fff; padding: 9px 12px; border-radius: 8px; font-size: 0.85rem; appearance: none; cursor: pointer; }
+.option-group select option { background: #1a3a5c; color: #fff; }
+.analyze-btn { width: 100%; padding: 14px; background: linear-gradient(135deg, #2980b9, #1abc9c); border: none; border-radius: 10px; color: #fff; font-size: 1rem; font-weight: 600; cursor: pointer; transition: opacity 0.2s, transform 0.1s; margin-top: 4px; }
+.analyze-btn:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
+.analyze-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.loading { display: none; text-align: center; padding: 32px; }
+.spinner { width: 48px; height: 48px; border: 4px solid rgba(255,255,255,0.2); border-top-color: #5dade2; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 16px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+#result-card { display: none; }
+.result-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,0.15); }
+.bird-icon { font-size: 2.5rem; }
+.bird-name h3 { font-size: 1.4rem; font-weight: 700; }
+.bird-name .sci-name { font-size: 0.85rem; opacity: 0.65; font-style: italic; margin-top: 2px; }
+.bird-name .eng-name { font-size: 0.85rem; opacity: 0.65; margin-top: 1px; }
+.confidence-badge { margin-left: auto; padding: 6px 14px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; white-space: nowrap; }
+.conf-high { background: rgba(39,174,96,0.3); border: 1px solid #27ae60; }
+.conf-mid  { background: rgba(243,156,18,0.3); border: 1px solid #f39c12; }
+.conf-low  { background: rgba(231,76,60,0.3);  border: 1px solid #e74c3c; }
+.result-section { margin-bottom: 16px; }
+.result-section h4 { font-size: 0.78rem; opacity: 0.6; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+.result-section p { font-size: 0.9rem; line-height: 1.7; opacity: 0.9; }
+.tag-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.tag { background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.2); border-radius: 20px; padding: 4px 12px; font-size: 0.78rem; }
+.endangered-tag { background: rgba(231,76,60,0.25); border-color: #e74c3c; color: #ff8a80; font-weight: 600; }
+.taxonomy-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.taxonomy-table td { padding: 6px 10px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+.taxonomy-table td:first-child { opacity: 0.55; width: 40px; }
+.taxonomy-table td:last-child { font-style: italic; }
+.iucn-badge { display: inline-block; padding: 4px 12px; border-radius: 6px; font-size: 0.82rem; font-weight: 700; margin-right: 8px; }
+.iucn-LC { background: rgba(39,174,96,0.3); border: 1px solid #27ae60; }
+.iucn-NT { background: rgba(52,152,219,0.3); border: 1px solid #3498db; }
+.iucn-VU { background: rgba(243,156,18,0.3); border: 1px solid #f39c12; }
+.iucn-EN { background: rgba(230,126,34,0.3); border: 1px solid #e67e22; }
+.iucn-CR { background: rgba(231,76,60,0.3);  border: 1px solid #e74c3c; }
+.reset-btn { width: 100%; margin-top: 16px; padding: 10px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #fff; border-radius: 8px; cursor: pointer; font-size: 0.85rem; transition: background 0.2s; }
+.reset-btn:hover { background: rgba(255,255,255,0.2); }
+.error-msg { background: rgba(231,76,60,0.2); border: 1px solid rgba(231,76,60,0.4); border-radius: 8px; padding: 14px; font-size: 0.85rem; display: none; margin-bottom: 12px; }
+footer { text-align: center; padding: 20px; font-size: 0.75rem; opacity: 0.4; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🦅 한국 갯벌 조류 동정 시스템</h1>
+  <p>사진을 업로드하면 AI가 조류 종을 동정합니다</p>
+  <span class="badge">🌍 유네스코 세계자연유산 한국의 갯벌</span>
+</header>
+<div class="container">
+  <div class="card">
+    <h2>📷 사진 업로드</h2>
+    <div class="upload-area" id="upload-area">
+      <input type="file" id="file-input" accept="image/*">
+      <div class="upload-icon">🖼️</div>
+      <p>클릭하거나 사진을 드래그하세요</p>
+      <small>JPG, PNG, WEBP 지원 · Ctrl+V 붙여넣기 가능</small>
+    </div>
+    <div class="btn-row">
+      <button class="camera-btn" onclick="openCamera()">📸 카메라로 촬영</button>
+      <button class="camera-btn" onclick="pasteFromClipboard()">📋 클립보드 붙여넣기</button>
+      <input type="file" id="camera-input" accept="image/*" capture="environment" style="display:none">
+    </div>
+    <div class="url-row">
+      <input type="text" id="url-input" placeholder="🔗 이미지 URL 입력 후 Enter" onkeydown="if(event.key==='Enter') loadFromUrl()">
+      <button class="camera-btn" style="white-space:nowrap;" onclick="loadFromUrl()">불러오기</button>
+    </div>
+    <div id="preview-wrap">
+      <img id="preview-img" src="" alt="미리보기">
+      <button class="remove-btn" onclick="removeImage()">✕ 사진 제거</button>
+    </div>
+  </div>
+  <div class="card">
+    <h2>📋 관찰 정보 (선택)</h2>
+    <div class="options-grid">
+      <div class="option-group">
+        <label>촬영 지역</label>
+        <select id="sel-location">
+          <option value="">선택 안함</option>
+          <option value="순천만 갯벌">순천만 갯벌 (전남)</option>
+          <option value="고창 갯벌">고창 갯벌 (전북)</option>
+          <option value="신안 갯벌">신안 갯벌 (전남)</option>
+          <option value="서천 갯벌">서천 갯벌 (충남)</option>
+        </select>
+      </div>
+      <div class="option-group">
+        <label>촬영 월</label>
+        <select id="sel-month">
+          <option value="">선택 안함</option>
+          <option value="1월">1월</option><option value="2월">2월</option>
+          <option value="3월">3월</option><option value="4월">4월</option>
+          <option value="5월">5월</option><option value="6월">6월</option>
+          <option value="7월">7월</option><option value="8월">8월</option>
+          <option value="9월">9월</option><option value="10월">10월</option>
+          <option value="11월">11월</option><option value="12월">12월</option>
+        </select>
+      </div>
+      <div class="option-group">
+        <label>새의 크기</label>
+        <select id="sel-size">
+          <option value="">선택 안함</option>
+          <option value="참새 크기 (약 15cm 이하)">참새 크기 (15cm 이하)</option>
+          <option value="비둘기 크기 (약 30cm)">비둘기 크기 (약 30cm)</option>
+          <option value="까마귀 크기 (약 50cm)">까마귀 크기 (약 50cm)</option>
+          <option value="두루미 크기 (약 100cm 이상)">두루미 크기 (100cm 이상)</option>
+        </select>
+      </div>
+      <div class="option-group">
+        <label>관찰 행동</label>
+        <select id="sel-behavior">
+          <option value="">선택 안함</option>
+          <option value="갯벌 위를 걷거나 먹이 탐색 중">갯벌 위 보행 / 먹이 탐색</option>
+          <option value="비행 중">비행 중</option>
+          <option value="무리 지어 있음">무리 지어 있음</option>
+          <option value="물 위에 떠 있음">물 위에 떠 있음</option>
+          <option value="갈대밭 또는 풀밭에 있음">갈대밭 / 풀밭</option>
+        </select>
+      </div>
+    </div>
+  </div>
+  <div class="error-msg" id="error-msg"></div>
+  <button class="analyze-btn" id="analyze-btn" onclick="analyze()" disabled>🔍 조류 동정 시작</button>
+  <div class="loading" id="loading">
+    <div class="spinner"></div>
+    <p>AI가 사진을 분석하고 있습니다...</p>
+    <small style="opacity:0.6; margin-top:6px; display:block">잠시만 기다려주세요</small>
+  </div>
+  <div class="card" id="result-card">
+    <div class="result-header">
+      <div class="bird-icon">🐦</div>
+      <div class="bird-name">
+        <h3 id="r-name">-</h3>
+        <div class="sci-name" id="r-sci">-</div>
+        <div class="eng-name" id="r-eng">-</div>
+      </div>
+      <span class="confidence-badge" id="r-conf">-</span>
+    </div>
+    <div class="result-section"><h4>동정 근거</h4><p id="r-reason">-</p></div>
+    <div class="result-section"><h4>유사종 및 구별점</h4><p id="r-similar">-</p></div>
+    <div class="result-section"><h4>출현 시기</h4><p id="r-season">-</p></div>
+    <div class="result-section">
+      <h4>보호 현황</h4>
+      <div class="tag-list" id="r-protect"></div>
+    </div>
+    <div class="result-section">
+      <h4>분류 체계</h4>
+      <table class="taxonomy-table">
+        <tr><td>계</td><td id="t-kingdom">-</td></tr>
+        <tr><td>문</td><td id="t-phylum">-</td></tr>
+        <tr><td>강</td><td id="t-class">-</td></tr>
+        <tr><td>목</td><td id="t-order">-</td></tr>
+        <tr><td>과</td><td id="t-family">-</td></tr>
+        <tr><td>속</td><td id="t-genus">-</td></tr>
+      </table>
+    </div>
+    <div class="result-section"><h4>IUCN 적색목록</h4><div id="r-iucn">-</div></div>
+    <div class="result-section"><h4>관찰 팁</h4><p id="r-tip">-</p></div>
+    <button class="reset-btn" onclick="resetAll()">↩ 다시 동정하기</button>
+  </div>
+</div>
+<footer>유네스코 세계자연유산 한국의 갯벌 조류 동정 시스템 · Powered by Groq AI</footer>
+<script>
+const API_URL = 'https://shorebirds-api.onrender.com/analyze';
+
+let imageBase64 = null;
+let imageMime = 'image/jpeg';
+
+document.getElementById('file-input').addEventListener('change', e => handleFile(e.target.files[0]));
+document.getElementById('camera-input').addEventListener('change', e => handleFile(e.target.files[0]));
+
+const uploadArea = document.getElementById('upload-area');
+uploadArea.addEventListener('dragover', e => { e.preventDefault(); uploadArea.classList.add('dragover'); });
+uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('dragover'));
+uploadArea.addEventListener('drop', e => {
+  e.preventDefault();
+  uploadArea.classList.remove('dragover');
+  if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+});
+
+document.addEventListener('paste', e => {
+  const items = e.clipboardData?.items;
+  if (!items) return;
+  for (const item of items) {
+    if (item.type.startsWith('image/')) { handleFile(item.getAsFile()); break; }
+  }
+});
+
+function openCamera() { document.getElementById('camera-input').click(); }
+
+async function pasteFromClipboard() {
+  try {
+    const items = await navigator.clipboard.read();
+    for (const item of items) {
+      const imageType = item.types.find(t => t.startsWith('image/'));
+      if (imageType) {
+        const blob = await item.getType(imageType);
+        handleFile(new File([blob], 'clipboard.png', { type: imageType }));
+        return;
+      }
+    }
+    showError('클립보드에 이미지가 없습니다. 이미지를 먼저 복사해주세요.');
+  } catch (e) {
+    showError('클립보드 접근 권한이 필요합니다. Ctrl+V로 붙여넣기를 시도해보세요.');
+  }
+}
+
+async function loadFromUrl() {
+  const url = document.getElementById('url-input').value.trim();
+  if (!url) return;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('이미지를 불러올 수 없습니다.');
+    const blob = await res.blob();
+    if (!blob.type.startsWith('image/')) throw new Error('이미지 파일이 아닙니다.');
+    handleFile(new File([blob], 'url-image', { type: blob.type }));
+    document.getElementById('url-input').value = '';
+  } catch (e) {
+    showError('URL 로드 실패: ' + e.message + ' (CORS 제한으로 일부 URL은 불가)');
+  }
+}
+
+function handleFile(file) {
+  if (!file || !file.type.startsWith('image/')) return;
+  imageMime = file.type;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const result = e.target.result;
+    imageBase64 = result.split(',')[1];
+    document.getElementById('preview-img').src = result;
+    document.getElementById('preview-wrap').style.display = 'block';
+    document.getElementById('analyze-btn').disabled = false;
+    hideError();
+  };
+  reader.readAsDataURL(file);
+}
+
+function removeImage() {
+  imageBase64 = null;
+  document.getElementById('preview-wrap').style.display = 'none';
+  document.getElementById('preview-img').src = '';
+  document.getElementById('file-input').value = '';
+  document.getElementById('analyze-btn').disabled = true;
+  document.getElementById('result-card').style.display = 'none';
+}
+
+function resetAll() { removeImage(); }
+
+function buildPrompt() {
+  const location = document.getElementById('sel-location').value;
+  const month    = document.getElementById('sel-month').value;
+  const size     = document.getElementById('sel-size').value;
+  const behavior = document.getElementById('sel-behavior').value;
+
+  let context = '';
+  if (location) context += `\n- 촬영 지역: ${location}`;
+  if (month)    context += `\n- 촬영 월: ${month}`;
+  if (size)     context += `\n- 새의 크기: ${size}`;
+  if (behavior) context += `\n- 관찰 행동: ${behavior}`;
+
+  return `당신은 한국 갯벌 조류 전문 동정가입니다.
+유네스코 세계자연유산 한국의 갯벌 4개 지역(순천만, 고창, 신안, 서천) 전문입니다.
+
+[지역별 주요 출현종]
+- 순천만: 흑두루미, 저어새, 검은머리물떼새, 민물도요, 청둥오리
+- 고창: 붉은어깨도요, 큰뒷부리도요, 민물도요, 개꿩, 흰물떼새
+- 신안: 저어새, 노랑부리백로, 검은머리갈매기, 알락꼬리마도요, 넓적부리도요
+- 서천: 붉은어깨도요, 민물도요, 검은머리물떼새, 흰물떼새, 마도요
+
+[관찰 정보]${context || '\n- 없음'}
+
+사진의 새를 동정하고 아래 JSON 형식으로만 응답하세요. 다른 텍스트 없이 JSON만 출력하세요.
+
+{
+  "국명": "종 이름",
+  "학명": "학명",
+  "영명": "English name",
+  "확신도": "높음 또는 보통 또는 낮음",
+  "동정근거": "사진에서 관찰된 구체적 특징",
+  "유사종": "유사종 및 구별점",
+  "출현시기": "월별 출현 시기",
+  "보호현황": "멸종위기 I급 또는 II급, 천연기념물 번호, 해당없음 등",
+  "관찰팁": "관찰 팁",
+  "분류": {
+    "계": "Animalia (동물계)",
+    "문": "Chordata (척삭동물문)",
+    "강": "Aves (조강)",
+    "목": "목 학명 (한국어 목명)",
+    "과": "과 학명 (한국어 과명)",
+    "속": "속 학명 (한국어 속명)"
+  },
+  "IUCN": {
+    "등급": "LC 또는 NT 또는 VU 또는 EN 또는 CR",
+    "등급명": "관심대상 또는 준위협 또는 취약 또는 위기 또는 위급",
+    "버전": "3.1(2024)"
+  }
+}`;
+}
+
+async function analyze() {
+  if (!imageBase64) return;
+  hideError();
+  document.getElementById('loading').style.display = 'block';
+  document.getElementById('analyze-btn').disabled = true;
+  document.getElementById('result-card').style.display = 'none';
+
+  try {
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        imageBase64,
+        imageMime,
+        prompt: buildPrompt()
+      })
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error?.message || `서버 오류 (${res.status})`);
+    }
+
+    const data = await res.json();
+    // 서버 응답에서 텍스트 추출 (Groq 형식 또는 { result } 형식 모두 대응)
+    const text = data.choices?.[0]?.message?.content || data.result || '';
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('응답 형식 오류. 다시 시도해주세요.');
+    renderResult(JSON.parse(jsonMatch[0]));
+
+  } catch (e) {
+    showError(e.message);
+  } finally {
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('analyze-btn').disabled = false;
+  }
+}
+
+function renderResult(r) {
+  document.getElementById('r-name').textContent    = r['국명'] || '-';
+  document.getElementById('r-sci').textContent     = r['학명'] || '-';
+  document.getElementById('r-eng').textContent     = r['영명'] || '-';
+  document.getElementById('r-reason').textContent  = r['동정근거'] || '-';
+  document.getElementById('r-similar').textContent = r['유사종'] || '-';
+  document.getElementById('r-season').textContent  = r['출현시기'] || '-';
+  document.getElementById('r-tip').textContent     = r['관찰팁'] || '-';
+
+  const conf = r['확신도'] || '';
+  const confEl = document.getElementById('r-conf');
+  confEl.textContent = conf;
+  confEl.className = 'confidence-badge ' + (conf === '높음' ? 'conf-high' : conf === '보통' ? 'conf-mid' : 'conf-low');
+
+  const protectEl = document.getElementById('r-protect');
+  protectEl.innerHTML = '';
+  const status = r['보호현황'] || '해당없음';
+  const tag = document.createElement('span');
+  tag.className = 'tag' + (status.includes('급') || status.includes('천연') ? ' endangered-tag' : '');
+  tag.textContent = status;
+  protectEl.appendChild(tag);
+
+  const tax = r['분류'] || {};
+  document.getElementById('t-kingdom').textContent = tax['계'] || '-';
+  document.getElementById('t-phylum').textContent  = tax['문'] || '-';
+  document.getElementById('t-class').textContent   = tax['강'] || '-';
+  document.getElementById('t-order').textContent   = tax['목'] || '-';
+  document.getElementById('t-family').textContent  = tax['과'] || '-';
+  document.getElementById('t-genus').textContent   = tax['속'] || '-';
+
+  const iucn = r['IUCN'] || {};
+  const iucnEl = document.getElementById('r-iucn');
+  if (iucn['등급']) {
+    iucnEl.innerHTML = `<span class="iucn-badge iucn-${iucn['등급']}">${iucn['등급']}</span>${iucn['등급명'] || ''} &nbsp;·&nbsp; IUCN 적색목록 ${iucn['버전'] || ''}`;
+  } else {
+    iucnEl.textContent = '-';
+  }
+
+  document.getElementById('result-card').style.display = 'block';
+  document.getElementById('result-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function showError(msg) {
+  const el = document.getElementById('error-msg');
+  el.textContent = '⚠️ ' + msg;
+  el.style.display = 'block';
+}
+
+function hideError() {
+  document.getElementById('error-msg').style.display = 'none';
+}
+</script>
+</body>
+</html>
